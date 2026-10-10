@@ -1,173 +1,118 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#000000">
-  <title>❤️ Для тебя</title>
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-      background: #000;
-      color: #fff;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    main {
-      width: 100%;
-      min-height: 100svh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: clamp(14px, 3vh, 28px);
-      padding: 18px;
-    }
-    canvas {
-      display: block;
-      width: min(94vw, 620px);
-      height: min(72vh, 620px);
-      max-height: 72svh;
-    }
-    .caption {
-      margin: 0;
-      color: #777;
-      font-size: clamp(13px, 2.8vw, 17px);
-      letter-spacing: 2px;
-      text-align: center;
-      user-select: none;
-    }
-    .hint {
-      margin: 0;
-      color: #333;
-      font-size: 11px;
-      letter-spacing: 1px;
-      text-align: center;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Широкое сердце</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-  <main>
-    <canvas id="heart" aria-label="Пульсирующее сердце из красных лучей"></canvas>
-    <p class="caption" id="message">для тебя ❤️</p>
-  </main>
+    <canvas id="heartCanvas"></canvas>
 
-  <script>
-    const canvas = document.getElementById("heart");
-    const ctx = canvas.getContext("2d");
-    const message = document.getElementById("message");
+    <script>
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
 
-    // Можно поменять надпись внутри сердца.
-    let heartText = "нажми ";
-    let pulseBoost = 0;
-    let start = performance.now();
+        let width, height, scale;
 
-    function resizeCanvas() {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+        // Настройка размера холста под экран
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            // Увеличил делитель до 1000, так как сердце стало шире и должно помещаться на экране
+            scale = Math.min(width, height) / 1000; 
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-    function heartPoint(t) {
-      // Параметрическое уравнение формы сердца.
-      const x = 16 * Math.pow(Math.sin(t), 3);
-      const y = 13 * Math.cos(t) - 5 * Math.cos(2*t)
-             - 2 * Math.cos(3*t) - Math.cos(4*t);
-      return { x, y: -y };
-    }
+        let segments = []; // Массив для сохранения нарисованных линий
+        let i = 0;         // Текущий угол построения
 
-    function draw(now) {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      ctx.clearRect(0, 0, w, h);
+        // Коэффициент ширины сердца (чем больше число, тем шире сердце)
+        const widthStretch = 15.0; 
 
-      const elapsed = (now - start) / 1000;
-      const beat = Math.pow(Math.max(0, Math.sin(elapsed * Math.PI * 1.7)), 8);
-      const pulse = 1 + 0.055 * beat + pulseBoost;
-      pulseBoost *= 0.92;
+        function draw() {
+            // 1. Очищаем экран
+            ctx.clearRect(0, 0, width, height);
+            
+            // 2. Перемещаем начало координат в центр экрана и инвертируем ось Y
+            ctx.save();
+            ctx.translate(width / 2, height / 2);
+            ctx.scale(scale, -scale); 
 
-      const cx = w / 2;
-      const cy = h / 2 + 4;
-      const scale = Math.min(w, h) * 0.020 * pulse;
-      const count = 150;
-      const inner = 0.59;
-      const outer = 1.0;
+            // 3. Рисуем накопленные линии сердца
+            ctx.lineWidth = 2;
+            for (let seg of segments) {
+                ctx.beginPath();
+                ctx.moveTo(seg.x1, seg.y1);
+                ctx.lineTo(seg.x2, seg.y2);
+                ctx.strokeStyle = seg.color;
+                ctx.stroke();
+            }
 
-      // Мягкое красное свечение за лучами.
-      const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, Math.min(w, h) * 0.42);
-      glow.addColorStop(0, "rgba(255, 0, 28, 0.10)");
-      glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, w, h);
+            // (Блок с отрисовкой серой линии "радара" удален)
 
-      // Лучи идут от внутреннего сердца к внешнему контуру.
-      for (let i = 0; i < count; i++) {
-        const t = (Math.PI * 2 * i) / count;
-        const p = heartPoint(t);
-        const x = p.x * scale;
-        const y = p.y * scale;
-        const wobble = 0.92 + 0.08 * Math.sin(i * 2.37 + elapsed * 2.2);
-        const x1 = cx + x * inner;
-        const y1 = cy + y * inner;
-        const x2 = cx + x * outer * wobble;
-        const y2 = cy + y * outer * wobble;
+            ctx.restore();
 
-        const alpha = 0.48 + 0.45 * (0.5 + 0.5 * Math.sin(i * 0.21 + elapsed * 2));
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = `rgba(255, 20, 48, ${alpha})`;
-        ctx.shadowColor = "rgba(255, 0, 35, 0.85)";
-        ctx.shadowBlur = 5;
-        ctx.stroke();
+            // 4. Логика анимации
+            if (i < 360) {
+                addHeartSegment(i); // Добавляем новые линии для текущего угла
+                i += 0.5;           // Скорость прорисовки
+            }
 
-        ctx.beginPath();
-        ctx.arc(x2, y2, 1.5 + 0.7 * beat, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, ${35 + Math.floor(beat * 35)}, ${55 + Math.floor(beat * 35)}, ${alpha})`;
-        ctx.fill();
-      }
+            requestAnimationFrame(draw);
+        }
 
-      // Чёрная сердцевина поверх лучей.
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      for (let i = 0; i <= 240; i++) {
-        const t = (Math.PI * 2 * i) / 240;
-        const p = heartPoint(t);
-        const x = cx + p.x * scale * inner;
-        const y = cy + p.y * scale * inner;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = "#000";
-      ctx.fill();
+        // Функция расчета координат сердца
+        function addHeartSegment(angleDeg) {
+            let a = angleDeg * Math.PI / 180;
+            
+            // Формула сердца. Умножаем xo на widthStretch, чтобы сделать его шире
+            let xo = widthStretch * 16 * Math.pow(Math.sin(a), 3);
+            let yo = (13 * Math.cos(a) - 5 * Math.cos(2*a) - 2 * Math.cos(3*a) - Math.cos(4*a)) * 16;
+            
+            // Случайная длина "шерсти" для эффекта пушистости
+            let L = Math.random() * 0.35 + 0.15;
+            let xi = xo * (1 - L);
+            let yi = yo * (1 - L);
 
-      // Текст в центре сердца.
-      ctx.fillStyle = "rgba(170, 170, 170, 0.65)";
-      ctx.font = `${Math.max(12, Math.min(18, w * 0.035))}px system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(heartText, cx, cy + 2);
+            // Рисуем пучок из 10 линий (создаем градиент от красного к темному)
+            for (let j = 0; j < 10; j++) {
+                let f = j / 10;
+                
+                // Перевод цветов в формат RGB
+                let r = Math.floor((1 - 0.6 * f) * 255);
+                let g = Math.floor(0.7 * (1 - f) * 255);
+                let b = Math.floor(0.8 * (1 - f) * 255);
+                let color = `rgb(${r},${g},${b})`;
+                
+                // Координаты начала и конца маленькой линии
+                let x1 = xo + (xi - xo) * f;
+                let y1 = yo + (yi - yo) * f;
+                let x2 = xo + (xi - xo) * (f + 0.1);
+                let y2 = yo + (yi - yo) * (f + 0.1);
 
-      requestAnimationFrame(draw);
-    }
+                // Сохраняем линию в массив
+                segments.push({ x1, y1, x2, y2, color });
+            }
+        }
 
-    function beatNow() {
-      pulseBoost = Math.min(0.16, pulseBoost + 0.11);
-    }
-
-    canvas.addEventListener("pointerdown", beatNow);
-    document.addEventListener("pointerdown", beatNow);
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-    requestAnimationFrame(draw);
-  </script>
+        // Запуск
+        requestAnimationFrame(draw);
+    </script>
 </body>
 </html>
